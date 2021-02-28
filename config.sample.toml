@@ -1,0 +1,14 @@
+['obd']
+# How often to poll in seconds
+poll_interval = 60
+
+[mqtt]
+host = '127.0.0.1'
+port = 1883
+username = ''
+password = ''
+ssl = false
+retain = false
+pub_qos = 0
+sub_qos = 0
+base_topic = 'vehicles/vehicle_id'
