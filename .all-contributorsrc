@@ -20,6 +20,15 @@
         "doc",
         "ideas"
       ]
+    },
+    {
+      "login": "mohittaneja-7",
+      "name": "Mohit Taneja",
+      "avatar_url": "https://avatars.githubusercontent.com/u/67370820?v=4",
+      "profile": "https://github.com/mohittaneja-7",
+      "contributions": [
+        "ideas"
+      ]
     }
   ],
   "contributorsPerLine": 7,
