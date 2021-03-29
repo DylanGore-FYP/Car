@@ -15,11 +15,11 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install pipenv
+      - name: Install dependencies
+        run: pipenv install
       - name: Setup Virtual Environment
         run: /
           export VENV_HOME_DIR=$(pipenv --venv)
           source $VENV_HOME_DIR/bin/activate
-      - name: Install dependencies
-        run: pipenv install
       - name: Run isort
         run: isort --check
