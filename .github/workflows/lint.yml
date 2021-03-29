@@ -16,10 +16,8 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install pipenv
       - name: Install dependencies
-        run: pipenv install
-      - name: Setup Virtual Environment
-        run: /
-          export VENV_HOME_DIR=$(pipenv --venv)
-          source $VENV_HOME_DIR/bin/activate
+        run: install --deploy --dev
       - name: Run isort
-        run: isort --check
+        run: pipenv run isort --check
+      - name: Run pylint
+        run: pipenv run pylint --fail-under 9.5 --check
