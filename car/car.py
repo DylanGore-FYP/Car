@@ -1,12 +1,14 @@
 #!/usr/bin/python3
-'''Python-based service for basic monitoring of a Raspberry Pi with data being output to MQTT'''
+'''Vehicle monitoring with data output over MQTT'''
 __author__ = 'Dylan Gore'
 # pylint: disable=unused-argument,invalid-overridden-method,arguments-differ,line-too-long
 
 import json
 import logging
 import ssl
+import sys
 import time
+from datetime import datetime
 
 import obd
 import paho.mqtt.client as mqtt
@@ -21,7 +23,7 @@ try:
     CONFIG = toml.load('config.toml')
 except FileNotFoundError:
     logging.error('Config file not found. Exiting.')
-    exit(1)
+    sys.exit(1)
 
 
 class MQTTClass(mqtt.Client):
@@ -30,7 +32,8 @@ class MQTTClass(mqtt.Client):
     def on_connect(self, mqtt_client, userdata, flags, mqtt_rc):
         '''Runs on a successful MQTT connection'''
         logging.info('Connected to MQTT (mqtt_rc: %s)', str(mqtt_rc))
-        mqtt_client.publish(f'{CONFIG["mqtt"]["base_topic"]}/status', 'online', qos=CONFIG["mqtt"]['pub_qos'], retain=True)
+        mqtt_client.publish(f'{CONFIG["mqtt"]["base_topic"]}/status', 'online',
+                            qos=CONFIG["mqtt"]['pub_qos'], retain=True)
 
     def on_message(self, mqtt_client, userdata, msg):
         '''Runs when an MQTT message is received'''
@@ -81,16 +84,27 @@ def create_mqtt_client(client):
     logging.info("mqtt_rc: %s", str(mqtt_rc))
 
 
-def publish_metric(metric, payload):
-    '''Publish a system metric to MQTT'''
-    json_data = {
-        metric: payload
-    }
-    if payload is not None:
-        logging.debug('Metric: %s %s', metric, str(payload))
-        MQTT_CLIENT.publish(f'{CONFIG["mqtt"]["base_topic"]}/{metric}', json.dumps(json_data),
-                            qos=CONFIG['mqtt']['pub_qos'],
-                            retain=CONFIG['mqtt']['retain'])
+def mqtt_publish_json(topic, json_payload, qos=CONFIG['mqtt']['pub_qos'], retain=CONFIG['mqtt']['retain']):
+    '''Publish JSON data to a specified MQTT topic'''
+    MQTT_CLIENT.publish(f'{CONFIG["mqtt"]["base_topic"]}/{topic}', json.dumps(json_payload),
+                        qos=qos, retain=retain)
+
+
+def get_obd_data(metric_name, obd_connection):
+    '''Get a specified metric from the OBD interface and return the result as a dictionary'''
+    value = None
+
+    str_metrics = ['fuel_type']
+
+    try:
+        if metric_name not in str_metrics:
+            value = float(obd_connection.query(obd.commands[metric_name.upper()]).value.magnitude)
+        else:
+            value = str(obd_connection.query(obd.commands[metric_name.upper()]).value.magnitude)
+    except Exception as err:
+        logging.warning('Unable to get metric %s - %s', metric_name, err)
+
+    return {'metric': metric_name, 'value': value}
 
 
 class Car:
@@ -109,7 +123,7 @@ class Car:
 
         # for count in range(1, 11):
         obd_connection = obd.OBD()
-        start_time = time.time()
+        # start_time = time.time()
         # break
         # if obd_connection.status() == obd.OBDStatus.OBD_CONNECTED:
         #     break
@@ -118,39 +132,42 @@ class Car:
         #     logging.warn('OBD connection attempt ' + str(count) + ' has failed')
         #     time.sleep(2)
 
-        fault_codes = obd.commands.GET_DTC
-        response = obd_connection.query(fault_codes)
+        # fault_codes = obd.commands.GET_DTC
+        # response = obd_connection.query(fault_codes)
         # logging.info(response.value.magnitude)
 
         # obd_connection.close()
 
-        print('\n\n\n', response.value)
-        # print(obd_connection.query(obd.commands.SPEED).value.magnitude)
-        # logging.info(obd_connection.query(obd.commands['SPEED']))
+        # print('\n\n\n', response.value)
+
         while True:
             logging.info(obd_connection.supported_commands)
-            try:
-                publish_metric('speed', float(obd_connection.query(obd.commands['SPEED']).value.magnitude))
-                publish_metric('rpm', float(obd_connection.query(obd.commands['RPM']).value.magnitude))
-                publish_metric('coolant_temp', float(obd_connection.query(obd.commands['COOLANT_TEMP']).value.magnitude))
-                publish_metric('engine_load', float(obd_connection.query(obd.commands['ENGINE_LOAD']).value.magnitude))
-                publish_metric('intake_temp', float(obd_connection.query(obd.commands['INTAKE_TEMP']).value.magnitude))
-                # publish_metric('throttle_pos', float(obd_connection.query(obd.commands['THROTTLE_POS']).value.magnitude))
-                # publish_metric('relative_throttle_pos', float(obd_connection.query(obd.commands['RELATIVE_THROTTLE_POS']).value.magnitude))
-                # publish_metric('run_time', float(obd_connection.query(obd.commands['RUN_TIME']).value.magnitude))
-                # publish_metric('fuel_level', float(obd_connection.query(obd.commands['FUEL_LEVEL']).value.magnitude))
-                # publish_metric('ambiant_air_temp', float(obd_connection.query(obd.commands['AMBIANT_AIR_TEMP']).value.magnitude))
-                # publish_metric('barometric_pressure', float(obd_connection.query(obd.commands['BAROMETRIC_PRESSURE']).value.magnitude))
-                # publish_metric('fuel_type', str(obd_connection.query(obd.commands['FUEL_TYPE']).value.magnitude))
-                # publish_metric('oil_temp', float(obd_connection.query(obd.commands['OIL_TEMP']).value.magnitude))
-                # publish_metric('fuel_rate', float(obd_connection.query(obd.commands['FUEL_RATE']).value.magnitude))
-            except Exception as err:
-                logging.error(err)
-            publish_metric('measurement_time', float(time.time() - start_time))
-            logging.info(f'Sleeping for {CONFIG["obd"]["poll_interval"]} seconds')
+
+            # Define the dictionary to store the metric data
+            json_data = {}
+
+            # The list of metrics to query
+            metrics = ['speed', 'rpm', 'coolant_temp', 'engine_load', 'intake_temp', 'throttle_pos',
+                       'relative_throttle_pos', 'run_time', 'fuel_level', 'ambiant_air_temp', 'barometric_pressure',
+                       'fuel_type', 'oil_temp', 'fuel_rate']
+
+            # For each metric in the list attempt to get a value for it and add it to the dictionary
+            for metric in metrics:
+                metric_data = get_obd_data(metric, obd_connection)
+                if metric_data['value'] is not None:
+                    json_data[metric_data['metric']] = metric_data['value']
+
+            # Add the current UTC timestamp to the dictionary
+            json_data['timestamp'] = datetime.utcnow()
+
+            # Publish the dictionary of metric data as a JSON object
+            mqtt_publish_json('data', json_data)
+
+            # publish_metric('measurement_time', float(time.time() - start_time))
+
+            # Sleep for the configured amount of time
+            logging.info('Sleeping for %s seconds', str(CONFIG["obd"]["poll_interval"]))
             time.sleep(CONFIG["obd"]["poll_interval"])
+
+        # Close the OBD connection correctly before exiting the program
         obd_connection.close()
-    #     except Exception as err:
-    #         logging.error(err)
-    #     logging.debug('Going to sleep')
-    #     time.sleep(300)

@@ -11,10 +11,11 @@ toml = "0.10.2"
 [dev-packages]
 pytest = "6.2.2"
 pytest-cov = "2.11.1"
-flake8 = "3.8.4"
-isort = "5.7.0"
+flake8 = "3.9.0"
+isort = "5.8.0"
 Flask = "1.1.2"
 codespell = "2.0.0"
+pylint = "2.7.2"
 
 [requires]
 python_version = "3"
