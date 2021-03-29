@@ -1,0 +1,25 @@
+name: Lint Code
+on:
+  push:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      - name: Install/update pip and pipenv
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pipenv
+      - name: Install dependencies
+        run: pipenv install --deploy --dev
+      - name: Run isort
+        run: pipenv run isort --check car
+      - name: Run pylint
+        run: pipenv run pylint car --fail-under 9.5
+      - name: Run flake8
+        run: pipenv run flake8 --max-line-length 120

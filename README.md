@@ -8,6 +8,8 @@
 <!-- markdownlint-restore -->
 <!-- prettier-ignore-end -->
 
+[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/DylanGore-FYP/Car/lint?label=Lint%20Status&logo=github&style=for-the-badge)](https://github.com/DylanGore-FYP/Car/actions/workflows/lint.yml)
+
 ## Contributors
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
