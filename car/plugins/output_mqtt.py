@@ -12,8 +12,8 @@ import toml
 
 # Load config.toml file
 try:
-    CONFIG = toml.load('config.toml')
-except FileNotFoundError:
+    CONFIG = toml.load('config.toml')['plugins']['output']
+except (FileNotFoundError, KeyError):
     logging.error('Config file not found. Exiting.')
     sys.exit(1)
 

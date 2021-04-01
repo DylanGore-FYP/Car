@@ -2,7 +2,8 @@
 # How often to poll in seconds
 poll_interval = 60
 
-[mqtt]
+[plugins.output.mqtt]
+enabled = true
 host = '127.0.0.1'
 port = 1883
 username = ''

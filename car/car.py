@@ -6,7 +6,6 @@ __author__ = 'Dylan Gore'
 import importlib
 import json
 import logging
-import pkgutil
 import sys
 import time
 from datetime import datetime
@@ -14,39 +13,54 @@ from datetime import datetime
 import obd
 import toml
 
-import car.plugins
-
 # Declare log message format string
 LOG_FORMAT = '[%(processName)s] [%(levelname)s] %(message)s'
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 OUTPUT_PLUGINS = []
+CONFIG_PLUGINS = []
 
 # Load config.toml file
 try:
     CONFIG = toml.load('config.toml')
+    # Get configured plugin names and add them to a list
+    for plugin_type in CONFIG['plugins'].keys():
+        for config_plugin in CONFIG['plugins'][plugin_type]:
+            CONFIG_PLUGINS.append(f'{plugin_type}_{config_plugin}')
+except KeyError as err:
+    logging.error('Malformed configuration file! Key %s was not found', err)
+    sys.exit(1)
 except FileNotFoundError:
     logging.error('Config file not found. Exiting.')
     sys.exit(1)
 
 
-def iter_namespace(ns_pkg):
-    '''Return a list of python modules in the same namespace'''
-    return pkgutil.iter_modules(ns_pkg.__path__, ns_pkg.__name__ + ".")
-
-
 def load_plugins():
     '''Load all plugins from the plugins folder'''
     logging.info('Loading plugins...')
-    for _, name, _ in iter_namespace(car.plugins):
-        plugin_module = importlib.import_module(name)
-        plugin = plugin_module.Plugin()
-        plugin_info = plugin.get_plugin_info()
+    # Loop through the list of user-configured plugins
+    for plugin_name in CONFIG_PLUGINS:
+        # Split the plugin name to get the type name separately
+        plugin_info = plugin_name.split('_')
+        # If the plugin is enabled in the config file, try to load the Python module
+        if CONFIG['plugins'][plugin_info[0]][plugin_info[1]]['enabled']:
+            try:
+                # Load the module
+                plugin_module = importlib.import_module(f'car.plugins.{plugin_name}')
+                # Initialise the plugin
+                plugin = plugin_module.Plugin()
+                # Get the plugin info
+                plugin_info = plugin.get_plugin_info()
 
-        if plugin_info['type'] == 'OUTPUT':
-            OUTPUT_PLUGINS.append(plugin)
+                # If the plugin is an output plugin, add it to the list
+                if plugin_info['type'] == 'OUTPUT':
+                    OUTPUT_PLUGINS.append(plugin)
 
-        logging.info('%s plugin has been loaded [type: %s]', plugin_info['name'], plugin_info['type'])
+                logging.info('%s plugin has been loaded [type: %s]', plugin_info['name'], plugin_info['type'])
+            except ModuleNotFoundError:
+                logging.warning('Attempted to load missing plugin: %s', plugin_name)
+            except AttributeError:
+                logging.error('Malformed plugin %s will not be loaded', plugin_name)
 
 
 def get_obd_data(metric_name, obd_connection):
@@ -68,7 +82,7 @@ def get_obd_data(metric_name, obd_connection):
 
 class Car:
     '''Class to handle getting data from the vehicle'''
-    @staticmethod
+    @ staticmethod
     def run():
         '''Initial entrypoint'''
 
