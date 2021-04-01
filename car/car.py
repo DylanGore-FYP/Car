@@ -3,20 +3,24 @@
 __author__ = 'Dylan Gore'
 # pylint: disable=unused-argument,invalid-overridden-method,arguments-differ,line-too-long
 
+import importlib
 import json
 import logging
-import ssl
+import pkgutil
 import sys
 import time
 from datetime import datetime
 
 import obd
-import paho.mqtt.client as mqtt
 import toml
+
+import car.plugins
 
 # Declare log message format string
 LOG_FORMAT = '[%(processName)s] [%(levelname)s] %(message)s'
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+
+OUTPUT_PLUGINS = []
 
 # Load config.toml file
 try:
@@ -26,68 +30,23 @@ except FileNotFoundError:
     sys.exit(1)
 
 
-class MQTTClass(mqtt.Client):
-    '''MQTT Client instance'''
-
-    def on_connect(self, mqtt_client, userdata, flags, mqtt_rc):
-        '''Runs on a successful MQTT connection'''
-        logging.info('Connected to MQTT (mqtt_rc: %s)', str(mqtt_rc))
-        mqtt_client.publish(f'{CONFIG["mqtt"]["base_topic"]}/status', 'online',
-                            qos=CONFIG["mqtt"]['pub_qos'], retain=True)
-
-    def on_message(self, mqtt_client, userdata, msg):
-        '''Runs when an MQTT message is received'''
-        payload = msg.payload.decode('utf-8')
-        logging.info('Msg Received on topic %s - %s', msg.topic, payload)
-
-    def on_publish(self, mqtt_client, userdata, mid):
-        '''Runs when an MQTT message is published'''
-        logging.debug('mid: %s', str(mid))
-
-    def on_subscribe(self, mqtt_client, userdata, mid, granted_qos):
-        '''Runs when a topic is subscribed to'''
-        logging.info('Subscribed mid:%s qos:%s', str(mid), str(granted_qos))
-
-    def on_log(self, mqtt_client, userdata, level, buffer):
-        '''Runs on MQTT log message'''
-        logging.debug(buffer)
-
-    def on_disconnect(self, client, userdata, mqtt_rc):
-        '''The callback function run on disconnection from the MQTT broker'''
-        logging.info('Disconnected from broker (mqtt_rc: %s)', str(mqtt_rc))
-        # If the client disconnected due to an error, log that and increment the Prometheus metric
-        if mqtt_rc != 0:
-            logging.error('Abnormal disconnect')
-
-    def run(self):
-        '''Runs the MQTT client'''
-        if CONFIG['mqtt']['ssl']:
-            self.tls_set(tls_version=ssl.PROTOCOL_TLSv1_2, cert_reqs=ssl.CERT_NONE)
-            self.tls_insecure_set(True)
-        self.username_pw_set(username=CONFIG['mqtt']['username'], password=CONFIG['mqtt']['password'])
-        self.connect(CONFIG['mqtt']['host'], int(CONFIG['mqtt']['port']), 60)
-
-        mqtt_rc = 0
-        while mqtt_rc == 0:
-            mqtt_rc = self.loop_start()
-        return mqtt_rc
+def iter_namespace(ns_pkg):
+    '''Return a list of python modules in the same namespace'''
+    return pkgutil.iter_modules(ns_pkg.__path__, ns_pkg.__name__ + ".")
 
 
-# Define the MQTT Client
-MQTT_CLIENT = MQTTClass()
+def load_plugins():
+    '''Load all plugins from the plugins folder'''
+    logging.info('Loading plugins...')
+    for _, name, _ in iter_namespace(car.plugins):
+        plugin_module = importlib.import_module(name)
+        plugin = plugin_module.Plugin()
+        plugin_info = plugin.get_plugin_info()
 
+        if plugin_info['type'] == 'OUTPUT':
+            OUTPUT_PLUGINS.append(plugin)
 
-def create_mqtt_client(client):
-    '''Creates the MQTT client'''
-    client.will_set(f'{CONFIG["mqtt"]["base_topic"]}/status', payload="offline", qos=2, retain=True)
-    mqtt_rc = client.run()
-    logging.info("mqtt_rc: %s", str(mqtt_rc))
-
-
-def mqtt_publish_json(topic, json_payload, qos=CONFIG['mqtt']['pub_qos'], retain=CONFIG['mqtt']['retain']):
-    '''Publish JSON data to a specified MQTT topic'''
-    MQTT_CLIENT.publish(f'{CONFIG["mqtt"]["base_topic"]}/{topic}', json.dumps(json_payload),
-                        qos=qos, retain=retain)
+        logging.info('%s plugin has been loaded [type: %s]', plugin_info['name'], plugin_info['type'])
 
 
 def get_obd_data(metric_name, obd_connection):
@@ -112,7 +71,12 @@ class Car:
     @staticmethod
     def run():
         '''Initial entrypoint'''
-        create_mqtt_client(MQTT_CLIENT)
+
+        load_plugins()
+
+        for plugin in OUTPUT_PLUGINS:
+            plugin.create_output_class()
+        # create_mqtt_client(MQTT_CLIENT)
 
         # time.sleep(5)
         obd.logger.setLevel(obd.logging.DEBUG)
@@ -161,7 +125,8 @@ class Car:
             json_data['timestamp'] = datetime.utcnow()
 
             # Publish the dictionary of metric data as a JSON object
-            mqtt_publish_json('data', json_data)
+            for plugin in OUTPUT_PLUGINS:
+                plugin.output_json('data', json)
 
             # publish_metric('measurement_time', float(time.time() - start_time))
 
