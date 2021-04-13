@@ -4,7 +4,6 @@ __author__ = 'Dylan Gore'
 # pylint: disable=unused-argument,invalid-overridden-method,arguments-differ,line-too-long
 
 import importlib
-import json
 import logging
 import sys
 import time
