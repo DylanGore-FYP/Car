@@ -1,6 +1,7 @@
 name: Lint Code
 on:
   push:
+  pull_request:
 
 jobs:
   deploy:
@@ -21,5 +22,7 @@ jobs:
         run: pipenv run isort --check car
       - name: Run pylint
         run: pipenv run pylint car --fail-under 9.5
+      - name: Run pylint (plugins)
+        run: pipenv run pylint car/plugins --fail-under 9.5
       - name: Run flake8
         run: pipenv run flake8 --max-line-length 120
