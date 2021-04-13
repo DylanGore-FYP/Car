@@ -140,7 +140,7 @@ class Car:
 
             # Publish the dictionary of metric data as a JSON object
             for plugin in OUTPUT_PLUGINS:
-                plugin.output_json('data', json)
+                plugin.output_json('data', json_data)
 
             # publish_metric('measurement_time', float(time.time() - start_time))
 
