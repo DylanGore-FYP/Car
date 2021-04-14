@@ -135,7 +135,7 @@ class Car:
                     json_data[metric_data['metric']] = metric_data['value']
 
             # Add the current UTC timestamp to the dictionary
-            json_data['timestamp'] = datetime.utcnow()
+            json_data['timestamp'] = str(datetime.utcnow())
 
             # Publish the dictionary of metric data as a JSON object
             for plugin in OUTPUT_PLUGINS:
