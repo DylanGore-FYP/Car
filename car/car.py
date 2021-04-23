@@ -110,6 +110,7 @@ class Car:
         #     time.sleep(2)
 
         fault_codes = {}
+        # pylint: disable=no-member
         response = obd_connection.query(obd.commands.GET_DTC)
 
         if response and len(response) > 0:
@@ -137,11 +138,11 @@ class Car:
             # Add vehicle information to payload
             json_data['vehicle_info'] = {}
             for entry in CONFIG['vehicle']:
-                if CONFIG['vehicle'][entry] != None and CONFIG['vehicle'][entry] != '':
+                if CONFIG['vehicle'][entry] is not None and CONFIG['vehicle'][entry] != '':
                     json_data['vehicle_info'][entry] = CONFIG['vehicle'][entry]
 
             # Add fault codes to payload
-            if (len(fault_codes) > 0):
+            if len(fault_codes) > 0:
                 json_data['fault_codes'] = fault_codes
 
             # For each metric in the list attempt to get a value for it and add it to the dictionary
