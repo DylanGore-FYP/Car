@@ -1,6 +1,12 @@
-['obd']
+[obd]
 # How often to poll in seconds
 poll_interval = 60
+
+[vehicle]
+friendly_name = ''
+manufacturer = ''
+model = ''
+driver = ''
 
 [plugins.output.mqtt]
 enabled = true

@@ -109,16 +109,22 @@ class Car:
         #     logging.warn('OBD connection attempt ' + str(count) + ' has failed')
         #     time.sleep(2)
 
-        # fault_codes = obd.commands.GET_DTC
-        # response = obd_connection.query(fault_codes)
-        # logging.info(response.value.magnitude)
+        fault_codes = {}
+        response = obd_connection.query(obd.commands.GET_DTC)
+
+        if response and len(response) > 0:
+            for fault in response:
+                fault_codes[fault[0]] = fault[1]
 
         # obd_connection.close()
 
         # print('\n\n\n', response.value)
 
         while True:
-            logging.info(obd_connection.supported_commands)
+            supported_commands = obd_connection.supported_commands
+            logging.info(supported_commands)
+            file = open('supported_commands.txt', 'w')
+            file.write(str(supported_commands))
 
             # Define the dictionary to store the metric data
             json_data = {}
@@ -127,6 +133,16 @@ class Car:
             metrics = ['speed', 'rpm', 'coolant_temp', 'engine_load', 'intake_temp', 'throttle_pos',
                        'relative_throttle_pos', 'run_time', 'fuel_level', 'ambiant_air_temp', 'barometric_pressure',
                        'fuel_type', 'oil_temp', 'fuel_rate']
+
+            # Add vehicle information to payload
+            json_data['vehicle_info'] = {}
+            for entry in CONFIG['vehicle']:
+                if CONFIG['vehicle'][entry] != None and CONFIG['vehicle'][entry] != '':
+                    json_data['vehicle_info'][entry] = CONFIG['vehicle'][entry]
+
+            # Add fault codes to payload
+            if (len(fault_codes) > 0):
+                json_data['fault_codes'] = fault_codes
 
             # For each metric in the list attempt to get a value for it and add it to the dictionary
             for metric in metrics:
