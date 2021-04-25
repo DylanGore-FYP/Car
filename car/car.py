@@ -99,10 +99,11 @@ def poll_gps():
     gps_data = {'lat': 0.0, 'lon': 0.0, 'alt': 0.0}
 
     if CONFIG['gps']['enabled']:
+        gpsd = gps.gps(mode=gps.WATCH_ENABLE | gps.WATCH_NEWSTYLE)
         count = 20
         while count > 0:
             # pylint: disable=not-callable
-            packet = gps.gps(mode=gps.WATCH_ENABLE | gps.WATCH_NEWSTYLE).next()
+            packet = gpsd.next()
             # If the packet is a GPS data packet
             if packet['class'] == 'TPV':
                 gps_data['lat'] = getattr(packet, 'lat', 0.0)
