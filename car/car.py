@@ -9,6 +9,7 @@ import sys
 import time
 from datetime import datetime
 
+import gps
 import obd
 import toml
 
@@ -79,8 +80,30 @@ def get_obd_data(metric_name, obd_connection):
     return {'metric': metric_name, 'value': value}
 
 
+def poll_gps():
+    '''Method to handle getting and parsing the GPS coordinates if enabled in the config'''
+    gpsd = gps.gps(mode=gps.WATCH_ENABLE | gps.WATCH_NEWSTYLE)
+    gps_data = {'lat': 0.0, 'lon': 0.0, 'alt': 0.0}
+    if CONFIG['gps']['enabled']:
+        count = 20
+        while count > 0:
+            packet = gpsd.next()
+            # If the packet is a GPS data packet
+            if packet['class'] == 'TPV':
+                gps_data['lat'] = getattr(packet, 'lat', 0.0)
+                gps_data['lon'] = getattr(packet, 'lon', 0.0)
+                gps_data['alt'] = getattr(packet, 'alt', 0.0)
+                # End the retry counter
+                count = 0
+            else:
+                # Decrement the retry counter
+                count -= 1
+    return gps_data
+
+
 class Car:
     '''Class to handle getting data from the vehicle'''
+    # pylint: disable=too-many-branches
     @ staticmethod
     def run():
         '''Initial entrypoint'''
@@ -92,14 +115,15 @@ class Car:
         # create_mqtt_client(MQTT_CLIENT)
 
         # time.sleep(5)
-        obd.logger.setLevel(obd.logging.DEBUG)
 
         time.sleep(5)
 
         obd_connection = None
 
         # for count in range(1, 11):
-        obd_connection = obd.OBD()
+        if CONFIG['obd']['enabled']:
+            obd.logger.setLevel(obd.logging.DEBUG)
+            obd_connection = obd.OBD()
         # start_time = time.time()
         # break
         # if obd_connection.status() == obd.OBDStatus.OBD_CONNECTED:
@@ -109,16 +133,25 @@ class Car:
         #     logging.warn('OBD connection attempt ' + str(count) + ' has failed')
         #     time.sleep(2)
 
-        # fault_codes = obd.commands.GET_DTC
-        # response = obd_connection.query(fault_codes)
-        # logging.info(response.value.magnitude)
+        fault_codes = {}
+        if CONFIG['obd']['enabled']:
+            # pylint: disable=no-member
+            response = obd_connection.query(obd.commands.GET_DTC)
+
+            if response and len(response) > 0:
+                for fault in response:
+                    fault_codes[fault[0]] = fault[1]
 
         # obd_connection.close()
 
         # print('\n\n\n', response.value)
 
         while True:
-            logging.info(obd_connection.supported_commands)
+            if CONFIG['obd']['enabled']:
+                supported_commands = obd_connection.supported_commands
+                logging.info(supported_commands)
+                file = open('supported_commands.txt', 'w')
+                file.write(str(supported_commands))
 
             # Define the dictionary to store the metric data
             json_data = {}
@@ -128,14 +161,28 @@ class Car:
                        'relative_throttle_pos', 'run_time', 'fuel_level', 'ambiant_air_temp', 'barometric_pressure',
                        'fuel_type', 'oil_temp', 'fuel_rate']
 
+            # Add vehicle information to payload
+            json_data['vehicle_info'] = {}
+            for entry in CONFIG['vehicle']:
+                if CONFIG['vehicle'][entry] is not None and CONFIG['vehicle'][entry] != '':
+                    json_data['vehicle_info'][entry] = CONFIG['vehicle'][entry]
+
+            # Add fault codes to payload
+            if len(fault_codes) > 0:
+                json_data['fault_codes'] = fault_codes
+
             # For each metric in the list attempt to get a value for it and add it to the dictionary
-            for metric in metrics:
-                metric_data = get_obd_data(metric, obd_connection)
-                if metric_data['value'] is not None:
-                    json_data[metric_data['metric']] = metric_data['value']
+            if CONFIG['obd']['enabled']:
+                for metric in metrics:
+                    metric_data = get_obd_data(metric, obd_connection)
+                    if metric_data['value'] is not None:
+                        json_data[metric_data['metric']] = metric_data['value']
 
             # Add the current UTC timestamp to the dictionary
             json_data['timestamp'] = str(datetime.utcnow())
+
+            # Get the GPS location
+            json_data = {**json_data, **poll_gps()}
 
             # Publish the dictionary of metric data as a JSON object
             for plugin in OUTPUT_PLUGINS:
@@ -148,4 +195,5 @@ class Car:
             time.sleep(CONFIG["obd"]["poll_interval"])
 
         # Close the OBD connection correctly before exiting the program
-        obd_connection.close()
+        if CONFIG['obd']['enabled']:
+            obd_connection.close()

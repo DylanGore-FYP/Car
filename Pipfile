@@ -7,15 +7,16 @@ name = "pypi"
 obd = "0.7.1"
 paho-mqtt = "1.5.1"
 toml = "0.10.2"
+gps = "3.19"
 
 [dev-packages]
-pytest = "6.2.2"
+pytest = "6.2.3"
 pytest-cov = "2.11.1"
-flake8 = "3.9.0"
+flake8 = "3.9.1"
 isort = "5.8.0"
 Flask = "1.1.2"
 codespell = "2.0.0"
-pylint = "2.7.2"
+pylint = "2.8.1"
 
 [requires]
 python_version = "3"
