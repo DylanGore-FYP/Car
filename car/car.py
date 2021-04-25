@@ -82,12 +82,13 @@ def get_obd_data(metric_name, obd_connection):
 
 def poll_gps():
     '''Method to handle getting and parsing the GPS coordinates if enabled in the config'''
-    gpsd = gps.gps(mode=gps.WATCH_ENABLE | gps.WATCH_NEWSTYLE)
     gps_data = {'lat': 0.0, 'lon': 0.0, 'alt': 0.0}
+
     if CONFIG['gps']['enabled']:
         count = 20
         while count > 0:
-            packet = gpsd.next()
+            # pylint: disable=not-callable
+            packet = gps.gps(mode=gps.WATCH_ENABLE | gps.WATCH_NEWSTYLE).next()
             # If the packet is a GPS data packet
             if packet['class'] == 'TPV':
                 gps_data['lat'] = getattr(packet, 'lat', 0.0)
