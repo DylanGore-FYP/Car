@@ -89,7 +89,7 @@ def poll_gps():
         while count > 0:
             packet = gpsd.next()
             # If the packet is a GPS data packet
-            if packet['class'] == 'TRV':
+            if packet['class'] == 'TPV':
                 gps_data['lat'] = getattr(packet, 'lat', 0.0)
                 gps_data['lon'] = getattr(packet, 'lon', 0.0)
                 gps_data['alt'] = getattr(packet, 'alt', 0.0)
