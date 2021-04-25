@@ -22,6 +22,11 @@ logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 OUTPUT_PLUGINS = []
 CONFIG_PLUGINS = []
 
+# The list of metrics to query
+metrics = ['speed', 'rpm', 'coolant_temp', 'engine_load', 'intake_temp', 'throttle_pos',
+           'relative_throttle_pos', 'run_time', 'fuel_level', 'ambiant_air_temp', 'barometric_pressure',
+           'fuel_type', 'oil_temp', 'fuel_rate']
+
 eel.init('ui')
 
 # Run using Chromium if on Linux, use ChromeDriver on Windows
@@ -81,6 +86,7 @@ def get_obd_data(metric_name, obd_connection):
     '''Get a specified metric from the OBD interface and return the result as a dictionary'''
     value = None
 
+    # The list of metrics that have a data type of string
     str_metrics = ['fuel_type']
 
     try:
@@ -117,6 +123,11 @@ def poll_gps():
     return gps_data
 
 
+def update_speed_metric(value):
+    '''Function to update the eel UI'''
+    logging.info('update speed %s', value)
+
+
 class Car:
     '''Class to handle getting data from the vehicle'''
     # pylint: disable=too-many-branches
@@ -138,25 +149,40 @@ class Car:
 
         # for count in range(1, 11):
         if CONFIG['obd']['enabled']:
-            obd.logger.setLevel(obd.logging.DEBUG)
-            obd_connection = obd.OBD()
-        # start_time = time.time()
-        # break
-        # if obd_connection.status() == obd.OBDStatus.OBD_CONNECTED:
-        #     break
-        #     logging.info('Connected to OBD')
-        # else:
-        #     logging.warn('OBD connection attempt ' + str(count) + ' has failed')
-        #     time.sleep(2)
+            obd.logger.setLevel(obd.logging.INFO)
+            obd_connection = obd.Async(fast=False)
+
+            ui_metrics = ['speed', 'rpm']
+
+            # Set the OBD metrics to watch
+            for metric_name in metrics:
+                try:
+                    if metric_name == 'speed':
+                        obd_connection.watch(obd.commands[metric_name.upper()], callback=update_speed_metric)
+                    else:
+                        obd_connection.watch(obd.commands[metric_name.upper()])
+                except Exception as err:
+                    logging.warning('Unable to watch metric %s - %s', metric_name, err)
+
+            obd_connection.start()
+
+            # start_time = time.time()
+            # break
+            # if obd_connection.status() == obd.OBDStatus.OBD_CONNECTED:
+            #     break
+            #     logging.info('Connected to OBD')
+            # else:
+            #     logging.warn('OBD connection attempt ' + str(count) + ' has failed')
+            #     time.sleep(2)
 
         fault_codes = {}
-        if CONFIG['obd']['enabled']:
-            # pylint: disable=no-member
-            response = obd_connection.query(obd.commands.GET_DTC)
+        # if CONFIG['obd']['enabled']:
+        # pylint: disable=no-member
+        #response = obd_connection.query(obd.commands.GET_DTC)
 
-            if response and len(response) > 0:
-                for fault in response:
-                    fault_codes[fault[0]] = fault[1]
+        # if response is not None:
+        #    for fault in response:
+        #        fault_codes[fault[0]] = fault[1]
 
         # obd_connection.close()
 
@@ -165,17 +191,12 @@ class Car:
         while True:
             if CONFIG['obd']['enabled']:
                 supported_commands = obd_connection.supported_commands
-                logging.info(supported_commands)
+                # logging.info(supported_commands)
                 file = open('supported_commands.txt', 'w')
                 file.write(str(supported_commands))
 
             # Define the dictionary to store the metric data
             json_data = {}
-
-            # The list of metrics to query
-            metrics = ['speed', 'rpm', 'coolant_temp', 'engine_load', 'intake_temp', 'throttle_pos',
-                       'relative_throttle_pos', 'run_time', 'fuel_level', 'ambiant_air_temp', 'barometric_pressure',
-                       'fuel_type', 'oil_temp', 'fuel_rate']
 
             # Add vehicle information to payload
             json_data['vehicle_info'] = {}
@@ -212,4 +233,5 @@ class Car:
 
         # Close the OBD connection correctly before exiting the program
         if CONFIG['obd']['enabled']:
+            obd_connection.stop()
             obd_connection.close()
