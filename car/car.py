@@ -9,6 +9,8 @@ import sys
 import time
 from datetime import datetime
 
+# pylint: disable=wildcard-import,unused-wildcard-import
+from gps import *
 import obd
 import toml
 
@@ -77,6 +79,30 @@ def get_obd_data(metric_name, obd_connection):
         logging.warning('Unable to get metric %s - %s', metric_name, err)
 
     return {'metric': metric_name, 'value': value}
+
+
+def poll_gps():
+    '''Method to handle getting and parsing the GPS coordinates if enabled in the config'''
+    # pylint: disable=undefined-variable
+    gpsd = gps(mode=WATCH_ENABLE | WATCH_NEWSTYLE)
+    gps_data: {'lat': 0.0, 'lon': 0.0, 'alt': 0.0}
+    if CONFIG['GPS']:
+        count = 10
+
+        while count > 0:
+            packet = gpsd.next()
+            # If the packet is a GPS data packet
+            if packet['class'] == 'TRV':
+                gps_data['lat'] = getattr(packet, 'lat', 0.0)
+                gps_data['lon'] = getattr(packet, 'lon', 0.0)
+                gps_data['alt'] = getattr(packet, 'alt', 0.0)
+                # End the retry counter
+                count = 0
+            else:
+                # Decrement the retry counter
+                count -= 1
+
+    return gps_data
 
 
 class Car:
@@ -153,6 +179,10 @@ class Car:
 
             # Add the current UTC timestamp to the dictionary
             json_data['timestamp'] = str(datetime.utcnow())
+
+            # Get the GPS location
+            if CONFIG['gps']['enabled']:
+                json_data = {**json_data, **poll_gps()}
 
             # Publish the dictionary of metric data as a JSON object
             for plugin in OUTPUT_PLUGINS:

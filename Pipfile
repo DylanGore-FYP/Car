@@ -7,6 +7,7 @@ name = "pypi"
 obd = "0.7.1"
 paho-mqtt = "1.5.1"
 toml = "0.10.2"
+gps = "3.19"
 
 [dev-packages]
 pytest = "6.2.3"
