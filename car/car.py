@@ -103,6 +103,7 @@ def poll_gps():
 
 class Car:
     '''Class to handle getting data from the vehicle'''
+    # pylint: disable=too-many-branches
     @ staticmethod
     def run():
         '''Initial entrypoint'''
@@ -114,14 +115,15 @@ class Car:
         # create_mqtt_client(MQTT_CLIENT)
 
         # time.sleep(5)
-        obd.logger.setLevel(obd.logging.DEBUG)
 
         time.sleep(5)
 
         obd_connection = None
 
         # for count in range(1, 11):
-        obd_connection = obd.OBD()
+        if CONFIG['obd']['enabled']:
+            obd.logger.setLevel(obd.logging.DEBUG)
+            obd_connection = obd.OBD()
         # start_time = time.time()
         # break
         # if obd_connection.status() == obd.OBDStatus.OBD_CONNECTED:
@@ -132,22 +134,24 @@ class Car:
         #     time.sleep(2)
 
         fault_codes = {}
-        # pylint: disable=no-member
-        response = obd_connection.query(obd.commands.GET_DTC)
+        if CONFIG['obd']['enabled']:
+            # pylint: disable=no-member
+            response = obd_connection.query(obd.commands.GET_DTC)
 
-        if response and len(response) > 0:
-            for fault in response:
-                fault_codes[fault[0]] = fault[1]
+            if response and len(response) > 0:
+                for fault in response:
+                    fault_codes[fault[0]] = fault[1]
 
         # obd_connection.close()
 
         # print('\n\n\n', response.value)
 
         while True:
-            supported_commands = obd_connection.supported_commands
-            logging.info(supported_commands)
-            file = open('supported_commands.txt', 'w')
-            file.write(str(supported_commands))
+            if CONFIG['obd']['enabled']:
+                supported_commands = obd_connection.supported_commands
+                logging.info(supported_commands)
+                file = open('supported_commands.txt', 'w')
+                file.write(str(supported_commands))
 
             # Define the dictionary to store the metric data
             json_data = {}
@@ -168,10 +172,11 @@ class Car:
                 json_data['fault_codes'] = fault_codes
 
             # For each metric in the list attempt to get a value for it and add it to the dictionary
-            for metric in metrics:
-                metric_data = get_obd_data(metric, obd_connection)
-                if metric_data['value'] is not None:
-                    json_data[metric_data['metric']] = metric_data['value']
+            if CONFIG['obd']['enabled']:
+                for metric in metrics:
+                    metric_data = get_obd_data(metric, obd_connection)
+                    if metric_data['value'] is not None:
+                        json_data[metric_data['metric']] = metric_data['value']
 
             # Add the current UTC timestamp to the dictionary
             json_data['timestamp'] = str(datetime.utcnow())
@@ -190,4 +195,5 @@ class Car:
             time.sleep(CONFIG["obd"]["poll_interval"])
 
         # Close the OBD connection correctly before exiting the program
-        obd_connection.close()
+        if CONFIG['obd']['enabled']:
+            obd_connection.close()

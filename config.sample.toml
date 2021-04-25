@@ -1,4 +1,5 @@
 [obd]
+enabled = true
 # How often to poll in seconds
 poll_interval = 60
 
