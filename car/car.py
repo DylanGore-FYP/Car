@@ -26,9 +26,13 @@ eel.init('ui')
 
 # Run using Chromium if on Linux, use ChromeDriver on Windows
 if system() == 'Linux':
-    eel.start('index.html', block=False, size=(800, 600), mode='custom', cmdline_args=['chromium-browser', '--kiosk', '--incognito', '--disable-pinch', '--overscroll-history-navigation=0', 'http://localhost:8000/index.html'])
+    eel.start('index.html', block=False, size=(800, 600), mode='custom',
+              cmdline_args=['chromium-browser', '--kiosk', '--incognito', '--disable-pinch',
+                            '--overscroll-history-navigation=0', 'http://localhost:8000/index.html'])
 else:
-    eel.start('index.html', block=False, size=(800, 600), cmdline_args=['--kiosk', '--incognito', '--disable-pinch', '--overscroll-history-navigation=0'], port=5500)
+    eel.start('index.html', block=False, size=(800, 600),
+              cmdline_args=['--kiosk', '--incognito', '--disable-pinch',
+                            '--overscroll-history-navigation=0'], port=5500)
 
 # Load config.toml file
 try:
