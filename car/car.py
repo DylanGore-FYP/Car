@@ -8,7 +8,9 @@ import logging
 import sys
 import time
 from datetime import datetime
+from platform import system
 
+import eel
 import gps
 import obd
 import toml
@@ -19,6 +21,14 @@ logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 OUTPUT_PLUGINS = []
 CONFIG_PLUGINS = []
+
+eel.init('ui')
+
+# Run using Chromium if on Linux, use ChromeDriver on Windows
+if system() == 'Linux':
+    eel.start('index.html', block=False, size=(800, 600), mode='custom', cmdline_args=['chromium-browser', '--kiosk', '--incognito', '--disable-pinch', '--overscroll-history-navigation=0', 'http://localhost:8000/index.html'])
+else:
+    eel.start('index.html', block=False, size=(800, 600), cmdline_args=['--kiosk', '--incognito', '--disable-pinch', '--overscroll-history-navigation=0'], port=5500)
 
 # Load config.toml file
 try:
@@ -193,7 +203,7 @@ class Car:
 
             # Sleep for the configured amount of time
             logging.info('Sleeping for %s seconds', str(CONFIG["obd"]["poll_interval"]))
-            time.sleep(CONFIG["obd"]["poll_interval"])
+            eel.sleep(CONFIG["obd"]["poll_interval"])
 
         # Close the OBD connection correctly before exiting the program
         if CONFIG['obd']['enabled']:
