@@ -139,41 +139,38 @@ class Car:
 
         for plugin in OUTPUT_PLUGINS:
             plugin.create_output_class()
-        # create_mqtt_client(MQTT_CLIENT)
-
-        # time.sleep(5)
-
         time.sleep(5)
 
         obd_connection = None
 
-        # for count in range(1, 11):
         if CONFIG['obd']['enabled']:
-            obd.logger.setLevel(obd.logging.INFO)
-            obd_connection = obd.Async(fast=False)
+            # Attempt to connect to OBD, retry if connection fails
+            for count in range(1, 6):
+                obd.logger.setLevel(obd.logging.INFO)
+                obd_connection = obd.Async(check_voltage=False)
 
-            ui_metrics = ['speed', 'rpm']
+                if not obd_connection.is_connected():
+                    time.sleep(2)
+                    logging.warning('OBD connection failed - Attempt: %d', count)
+                    CONFIG['obd']['enabled'] = False
+                else:
+                    CONFIG['obd']['enabled'] = True
+                    break
 
-            # Set the OBD metrics to watch
-            for metric_name in metrics:
-                try:
-                    if metric_name == 'speed':
-                        obd_connection.watch(obd.commands[metric_name.upper()], callback=update_speed_metric)
-                    else:
-                        obd_connection.watch(obd.commands[metric_name.upper()])
-                except Exception as err:
-                    logging.warning('Unable to watch metric %s - %s', metric_name, err)
+            if obd_connection.is_connected():
+                ui_metrics = ['speed', 'rpm']
 
-            obd_connection.start()
+                # Set the OBD metrics to watch
+                for metric_name in metrics:
+                    try:
+                        if metric_name == 'speed':
+                            obd_connection.watch(obd.commands[metric_name.upper()], callback=update_speed_metric)
+                        else:
+                            obd_connection.watch(obd.commands[metric_name.upper()])
+                    except Exception as err:
+                        logging.warning('Unable to watch metric %s - %s', metric_name, err)
 
-            # start_time = time.time()
-            # break
-            # if obd_connection.status() == obd.OBDStatus.OBD_CONNECTED:
-            #     break
-            #     logging.info('Connected to OBD')
-            # else:
-            #     logging.warn('OBD connection attempt ' + str(count) + ' has failed')
-            #     time.sleep(2)
+                obd_connection.start()
 
         fault_codes = {}
         # if CONFIG['obd']['enabled']:
@@ -199,10 +196,9 @@ class Car:
             json_data = {}
 
             # Add vehicle information to payload
-            json_data['vehicle_info'] = {}
             for entry in CONFIG['vehicle']:
                 if CONFIG['vehicle'][entry] is not None and CONFIG['vehicle'][entry] != '':
-                    json_data['vehicle_info'][entry] = CONFIG['vehicle'][entry]
+                    json_data[entry] = CONFIG['vehicle'][entry]
 
             # Add fault codes to payload
             if len(fault_codes) > 0:
@@ -216,7 +212,7 @@ class Car:
                         json_data[metric_data['metric']] = metric_data['value']
 
             # Add the current UTC timestamp to the dictionary
-            json_data['timestamp'] = str(datetime.utcnow())
+            json_data['timestamp'] = str(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ%z'))
 
             # Get the GPS location
             json_data = {**json_data, **poll_gps()}
