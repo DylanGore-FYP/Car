@@ -19,6 +19,9 @@ import toml
 LOG_FORMAT = '[%(processName)s] [%(levelname)s] %(message)s'
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
+# The format string for timestamps
+TIME_FMT = '%Y-%m-%dT%H:%M:%SZ%z'
+
 OUTPUT_PLUGINS = []
 CONFIG_PLUGINS = []
 
@@ -158,7 +161,7 @@ class Car:
                     break
 
             if obd_connection.is_connected():
-                ui_metrics = ['speed', 'rpm']
+                # ui_metrics = ['speed', 'rpm']
 
                 # Set the OBD metrics to watch
                 for metric_name in metrics:
@@ -175,7 +178,7 @@ class Car:
         fault_codes = {}
         # if CONFIG['obd']['enabled']:
         # pylint: disable=no-member
-        #response = obd_connection.query(obd.commands.GET_DTC)
+        # response = obd_connection.query(obd.commands.GET_DTC)
 
         # if response is not None:
         #    for fault in response:
@@ -189,8 +192,8 @@ class Car:
             if CONFIG['obd']['enabled']:
                 supported_commands = obd_connection.supported_commands
                 # logging.info(supported_commands)
-                file = open('supported_commands.txt', 'w')
-                file.write(str(supported_commands))
+                with open('supported_commands.txt', 'w') as file:
+                    file.write(str(supported_commands))
 
             # Define the dictionary to store the metric data
             json_data = {}
@@ -212,7 +215,7 @@ class Car:
                         json_data[metric_data['metric']] = metric_data['value']
 
             # Add the current UTC timestamp to the dictionary
-            json_data['timestamp'] = str(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ%z'))
+            json_data['timestamp'] = str(datetime.utcnow().strftime(TIME_FMT))
 
             # Get the GPS location
             json_data = {**json_data, **poll_gps()}
