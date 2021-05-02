@@ -5,6 +5,7 @@ __author__ = 'Dylan Gore'
 
 import importlib
 import logging
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -129,6 +130,24 @@ def poll_gps():
 def update_speed_metric(value):
     '''Function to update the eel UI'''
     logging.info('update speed %s', value)
+    eel.updateGauges(value, 0)
+
+@eel.expose
+def close_program():
+    '''Method to cleanly exit, exposed via eel so can be called from JS'''
+    print('Close python')
+    sys.exit(0)
+
+
+@eel.expose
+def pi_power(mode):
+    '''Method to handle shutting down or rebooting a Raspberry Pi'''
+    accepted = ['shutdown', 'reboot']
+
+    # Only run the command if it is in the above list
+    if mode in accepted:
+        subprocess.run(["sudo", mode, "now"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        close_program()
 
 
 class Car:
