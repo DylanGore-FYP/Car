@@ -6,9 +6,13 @@ import json
 import logging
 import ssl
 import sys
+from datetime import datetime
 
 import paho.mqtt.client as mqtt
 import toml
+
+# The format string for timestamps
+TIME_FMT = '%Y-%m-%dT%H:%M:%SZ%z'
 
 # Load config.toml file
 try:
@@ -23,8 +27,9 @@ class MQTTClass(mqtt.Client):
 
     def on_connect(self, mqtt_client, userdata, flags, mqtt_rc):
         '''Runs on a successful MQTT connection'''
+        will = {'status': 'online', 'timestamp': str(datetime.utcnow().strftime(TIME_FMT))}
         logging.info('Connected to MQTT (mqtt_rc: %s)', str(mqtt_rc))
-        mqtt_client.publish(f'{CONFIG["mqtt"]["base_topic"]}/status', 'online',
+        mqtt_client.publish(f'{CONFIG["mqtt"]["base_topic"]}/status', json.dumps(will),
                             qos=CONFIG["mqtt"]['pub_qos'], retain=True)
 
     def on_message(self, mqtt_client, userdata, msg):
@@ -84,7 +89,8 @@ class Plugin:
 
     def create_output_class(self):
         '''Creates the MQTT client'''
-        self.MQTT_CLIENT.will_set(f'{CONFIG["mqtt"]["base_topic"]}/status', payload="offline", qos=2, retain=True)
+        will = json.dumps({'status': 'offline', 'timestamp': str(datetime.utcnow().strftime(TIME_FMT))})
+        self.MQTT_CLIENT.will_set(f'{CONFIG["mqtt"]["base_topic"]}/status', payload=will, qos=2, retain=True)
         mqtt_rc = self.MQTT_CLIENT.run()
         logging.info("mqtt_rc: %s", str(mqtt_rc))
 

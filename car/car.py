@@ -5,10 +5,13 @@ __author__ = 'Dylan Gore'
 
 import importlib
 import logging
+import subprocess
 import sys
 import time
 from datetime import datetime
+from platform import system
 
+import eel
 import gps
 import obd
 import toml
@@ -17,8 +20,28 @@ import toml
 LOG_FORMAT = '[%(processName)s] [%(levelname)s] %(message)s'
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
+# The format string for timestamps
+TIME_FMT = '%Y-%m-%dT%H:%M:%SZ%z'
+
 OUTPUT_PLUGINS = []
 CONFIG_PLUGINS = []
+
+# The list of metrics to query
+metrics = ['speed', 'rpm', 'coolant_temp', 'engine_load', 'intake_temp', 'throttle_pos',
+           'relative_throttle_pos', 'run_time', 'fuel_level', 'ambiant_air_temp', 'barometric_pressure',
+           'fuel_type', 'oil_temp', 'fuel_rate']
+
+eel.init('ui')
+
+# Run using Chromium if on Linux, use ChromeDriver on Windows
+if system() == 'Linux':
+    eel.start('index.html', block=False, size=(800, 600), mode='custom',
+              cmdline_args=['chromium-browser', '--kiosk', '--incognito', '--disable-pinch',
+                            '--overscroll-history-navigation=0', 'http://localhost:8000/index.html'])
+else:
+    eel.start('index.html', block=False, size=(800, 600),
+              cmdline_args=['--kiosk', '--incognito', '--disable-pinch',
+                            '--overscroll-history-navigation=0'], port=5500)
 
 # Load config.toml file
 try:
@@ -67,6 +90,7 @@ def get_obd_data(metric_name, obd_connection):
     '''Get a specified metric from the OBD interface and return the result as a dictionary'''
     value = None
 
+    # The list of metrics that have a data type of string
     str_metrics = ['fuel_type']
 
     try:
@@ -82,11 +106,13 @@ def get_obd_data(metric_name, obd_connection):
 
 def poll_gps():
     '''Method to handle getting and parsing the GPS coordinates if enabled in the config'''
-    gpsd = gps.gps(mode=gps.WATCH_ENABLE | gps.WATCH_NEWSTYLE)
     gps_data = {'lat': 0.0, 'lon': 0.0, 'alt': 0.0}
+
     if CONFIG['gps']['enabled']:
+        gpsd = gps.gps(mode=gps.WATCH_ENABLE | gps.WATCH_NEWSTYLE)
         count = 20
         while count > 0:
+            # pylint: disable=not-callable
             packet = gpsd.next()
             # If the packet is a GPS data packet
             if packet['class'] == 'TPV':
@@ -101,6 +127,31 @@ def poll_gps():
     return gps_data
 
 
+def update_speed_metric(value):
+    '''Function to update the eel UI'''
+    logging.info('update speed %s', value)
+    # pylint: disable=no-member
+    eel.updateGauges(value, 0)
+
+
+@eel.expose
+def close_program():
+    '''Method to cleanly exit, exposed via eel so can be called from JS'''
+    print('Close python')
+    sys.exit(0)
+
+
+@eel.expose
+def pi_power(mode):
+    '''Method to handle shutting down or rebooting a Raspberry Pi'''
+    accepted = ['shutdown', 'reboot']
+
+    # Only run the command if it is in the above list
+    if mode in accepted:
+        subprocess.run(["sudo", mode, "now"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        close_program()
+
+
 class Car:
     '''Class to handle getting data from the vehicle'''
     # pylint: disable=too-many-branches
@@ -112,35 +163,47 @@ class Car:
 
         for plugin in OUTPUT_PLUGINS:
             plugin.create_output_class()
-        # create_mqtt_client(MQTT_CLIENT)
-
-        # time.sleep(5)
-
         time.sleep(5)
 
         obd_connection = None
 
-        # for count in range(1, 11):
         if CONFIG['obd']['enabled']:
-            obd.logger.setLevel(obd.logging.DEBUG)
-            obd_connection = obd.OBD()
-        # start_time = time.time()
-        # break
-        # if obd_connection.status() == obd.OBDStatus.OBD_CONNECTED:
-        #     break
-        #     logging.info('Connected to OBD')
-        # else:
-        #     logging.warn('OBD connection attempt ' + str(count) + ' has failed')
-        #     time.sleep(2)
+            # Attempt to connect to OBD, retry if connection fails
+            for count in range(1, 6):
+                obd.logger.setLevel(obd.logging.INFO)
+                obd_connection = obd.Async(check_voltage=False)
+
+                if not obd_connection.is_connected():
+                    time.sleep(2)
+                    logging.warning('OBD connection failed - Attempt: %d', count)
+                    CONFIG['obd']['enabled'] = False
+                else:
+                    CONFIG['obd']['enabled'] = True
+                    break
+
+            if obd_connection.is_connected():
+                # ui_metrics = ['speed', 'rpm']
+
+                # Set the OBD metrics to watch
+                for metric_name in metrics:
+                    try:
+                        if metric_name == 'speed':
+                            obd_connection.watch(obd.commands[metric_name.upper()], callback=update_speed_metric)
+                        else:
+                            obd_connection.watch(obd.commands[metric_name.upper()])
+                    except Exception as err:
+                        logging.warning('Unable to watch metric %s - %s', metric_name, err)
+
+                obd_connection.start()
 
         fault_codes = {}
-        if CONFIG['obd']['enabled']:
-            # pylint: disable=no-member
-            response = obd_connection.query(obd.commands.GET_DTC)
+        # if CONFIG['obd']['enabled']:
+        # pylint: disable=no-member
+        # response = obd_connection.query(obd.commands.GET_DTC)
 
-            if response and len(response) > 0:
-                for fault in response:
-                    fault_codes[fault[0]] = fault[1]
+        # if response is not None:
+        #    for fault in response:
+        #        fault_codes[fault[0]] = fault[1]
 
         # obd_connection.close()
 
@@ -149,23 +212,17 @@ class Car:
         while True:
             if CONFIG['obd']['enabled']:
                 supported_commands = obd_connection.supported_commands
-                logging.info(supported_commands)
-                file = open('supported_commands.txt', 'w')
-                file.write(str(supported_commands))
+                # logging.info(supported_commands)
+                with open('supported_commands.txt', 'w') as file:
+                    file.write(str(supported_commands))
 
             # Define the dictionary to store the metric data
             json_data = {}
 
-            # The list of metrics to query
-            metrics = ['speed', 'rpm', 'coolant_temp', 'engine_load', 'intake_temp', 'throttle_pos',
-                       'relative_throttle_pos', 'run_time', 'fuel_level', 'ambiant_air_temp', 'barometric_pressure',
-                       'fuel_type', 'oil_temp', 'fuel_rate']
-
             # Add vehicle information to payload
-            json_data['vehicle_info'] = {}
             for entry in CONFIG['vehicle']:
                 if CONFIG['vehicle'][entry] is not None and CONFIG['vehicle'][entry] != '':
-                    json_data['vehicle_info'][entry] = CONFIG['vehicle'][entry]
+                    json_data[entry] = CONFIG['vehicle'][entry]
 
             # Add fault codes to payload
             if len(fault_codes) > 0:
@@ -179,7 +236,7 @@ class Car:
                         json_data[metric_data['metric']] = metric_data['value']
 
             # Add the current UTC timestamp to the dictionary
-            json_data['timestamp'] = str(datetime.utcnow())
+            json_data['timestamp'] = str(datetime.utcnow().strftime(TIME_FMT))
 
             # Get the GPS location
             json_data = {**json_data, **poll_gps()}
@@ -192,8 +249,9 @@ class Car:
 
             # Sleep for the configured amount of time
             logging.info('Sleeping for %s seconds', str(CONFIG["obd"]["poll_interval"]))
-            time.sleep(CONFIG["obd"]["poll_interval"])
+            eel.sleep(CONFIG["obd"]["poll_interval"])
 
         # Close the OBD connection correctly before exiting the program
         if CONFIG['obd']['enabled']:
+            obd_connection.stop()
             obd_connection.close()
