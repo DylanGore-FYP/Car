@@ -64,3 +64,5 @@ This project uses [Gitmoji](https://gitmoji.dev/) for commit organisation. For m
 <!-- prettier-ignore-end -->
 
 <!-- ALL-CONTRIBUTORS-LIST:END -->
+
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification.
