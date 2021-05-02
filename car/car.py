@@ -130,7 +130,9 @@ def poll_gps():
 def update_speed_metric(value):
     '''Function to update the eel UI'''
     logging.info('update speed %s', value)
+    # pylint: disable=no-member
     eel.updateGauges(value, 0)
+
 
 @eel.expose
 def close_program():
