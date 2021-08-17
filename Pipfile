@@ -11,13 +11,13 @@ gps = "3.19"
 eel = "*"
 
 [dev-packages]
-pytest = "6.2.3"
-pytest-cov = "2.11.1"
-flake8 = "3.9.1"
-isort = "5.8.0"
-Flask = "1.1.2"
-codespell = "2.0.0"
-pylint = "2.8.1"
+pytest = "6.2.4"
+pytest-cov = "2.12.1"
+flake8 = "3.9.2"
+isort = "5.9.3"
+Flask = "2.0.1"
+codespell = "2.1.0"
+pylint = "2.9.6"
 
 [requires]
 python_version = "3"
